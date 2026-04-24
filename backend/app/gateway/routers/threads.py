@@ -373,53 +373,55 @@ async def search_threads(body: ThreadSearchRequest, request: Request) -> list[Th
             )
 
     # -----------------------------------------------------------------------
-    # Phase 2: Checkpointer supplement
-    # Discovers threads not yet in the Store (e.g. created by LangGraph
-    # Server) and lazily migrates them so future searches skip this phase.
+    # Phase 2: Checkpointer supplement (expensive)
     # -----------------------------------------------------------------------
-    try:
-        async for checkpoint_tuple in checkpointer.alist(None):
-            cfg = getattr(checkpoint_tuple, "config", {})
-            thread_id = cfg.get("configurable", {}).get("thread_id")
-            if not thread_id or thread_id in merged:
-                continue
+    # In production with many checkpoints, a full checkpointer scan can add
+    # seconds to every list call. Prefer Store-only results when available and
+    # only scan checkpointer as a fallback for legacy threads absent from Store.
+    if not merged:
+        try:
+            async for checkpoint_tuple in checkpointer.alist(None):
+                cfg = getattr(checkpoint_tuple, "config", {})
+                thread_id = cfg.get("configurable", {}).get("thread_id")
+                if not thread_id or thread_id in merged:
+                    continue
 
-            # Skip sub-graph checkpoints (checkpoint_ns is non-empty for those)
-            if cfg.get("configurable", {}).get("checkpoint_ns", ""):
-                continue
+                # Skip sub-graph checkpoints (checkpoint_ns is non-empty for those)
+                if cfg.get("configurable", {}).get("checkpoint_ns", ""):
+                    continue
 
-            ckpt_meta = getattr(checkpoint_tuple, "metadata", {}) or {}
-            if extract_owner_id(ckpt_meta) != user_id:
-                continue
-            # Strip LangGraph internal keys from the user-visible metadata dict
-            user_meta = {k: v for k, v in ckpt_meta.items() if k not in ("created_at", "updated_at", "step", "source", "writes", "parents")}
+                ckpt_meta = getattr(checkpoint_tuple, "metadata", {}) or {}
+                if extract_owner_id(ckpt_meta) != user_id:
+                    continue
+                # Strip LangGraph internal keys from the user-visible metadata dict
+                user_meta = {k: v for k, v in ckpt_meta.items() if k not in ("created_at", "updated_at", "step", "source", "writes", "parents")}
 
-            # Extract state values (title) from the checkpoint's channel_values
-            checkpoint_data = getattr(checkpoint_tuple, "checkpoint", {}) or {}
-            channel_values = checkpoint_data.get("channel_values", {})
-            ckpt_values = {}
-            if title := channel_values.get("title"):
-                ckpt_values["title"] = title
+                # Extract state values (title) from the checkpoint's channel_values
+                checkpoint_data = getattr(checkpoint_tuple, "checkpoint", {}) or {}
+                channel_values = checkpoint_data.get("channel_values", {})
+                ckpt_values = {}
+                if title := channel_values.get("title"):
+                    ckpt_values["title"] = title
 
-            thread_resp = ThreadResponse(
-                thread_id=thread_id,
-                status=_derive_thread_status(checkpoint_tuple),
-                created_at=str(ckpt_meta.get("created_at", "")),
-                updated_at=str(ckpt_meta.get("updated_at", ckpt_meta.get("created_at", ""))),
-                metadata=user_meta,
-                values=ckpt_values,
-            )
-            merged[thread_id] = thread_resp
+                thread_resp = ThreadResponse(
+                    thread_id=thread_id,
+                    status=_derive_thread_status(checkpoint_tuple),
+                    created_at=str(ckpt_meta.get("created_at", "")),
+                    updated_at=str(ckpt_meta.get("updated_at", ckpt_meta.get("created_at", ""))),
+                    metadata=user_meta,
+                    values=ckpt_values,
+                )
+                merged[thread_id] = thread_resp
 
-            # Lazy migration — write to Store so the next search finds it there
-            if store is not None:
-                try:
-                    await _store_upsert(store, thread_id, metadata=user_meta, values=ckpt_values or None)
-                except Exception:
-                    logger.debug("Failed to migrate thread %s to store (non-fatal)", thread_id)
-    except Exception:
-        logger.exception("Checkpointer scan failed during thread search")
-        # Don't raise — return whatever was collected from Store + partial scan
+                # Lazy migration — write to Store so the next search finds it there
+                if store is not None:
+                    try:
+                        await _store_upsert(store, thread_id, metadata=user_meta, values=ckpt_values or None)
+                    except Exception:
+                        logger.debug("Failed to migrate thread %s to store (non-fatal)", thread_id)
+        except Exception:
+            logger.exception("Checkpointer scan failed during thread search")
+            # Don't raise — return whatever was collected from Store + partial scan
 
     # -----------------------------------------------------------------------
     # Phase 3: Filter → sort → paginate
