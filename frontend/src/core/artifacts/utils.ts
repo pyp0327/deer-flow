@@ -1,5 +1,22 @@
 import { getBackendBaseURL } from "../config";
+import { getOrCreateClientUserId } from "../session/user-id";
 import type { AgentThread } from "../threads";
+
+function withUserIdQuery(url: string): string {
+  if (typeof window === "undefined") {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (!parsed.searchParams.has("deer_user_id")) {
+      parsed.searchParams.set("deer_user_id", getOrCreateClientUserId());
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
 
 export function urlOfArtifact({
   filepath,
@@ -13,9 +30,13 @@ export function urlOfArtifact({
   isMock?: boolean;
 }) {
   if (isMock) {
-    return `${getBackendBaseURL()}/mock/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`;
+    return withUserIdQuery(
+      `${getBackendBaseURL()}/mock/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`,
+    );
   }
-  return `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`;
+  return withUserIdQuery(
+    `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${filepath}${download ? "?download=true" : ""}`,
+  );
 }
 
 export function extractArtifactsFromThread(thread: AgentThread) {
@@ -23,5 +44,7 @@ export function extractArtifactsFromThread(thread: AgentThread) {
 }
 
 export function resolveArtifactURL(absolutePath: string, threadId: string) {
-  return `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${absolutePath}`;
+  return withUserIdQuery(
+    `${getBackendBaseURL()}/api/threads/${threadId}/artifacts${absolutePath}`,
+  );
 }

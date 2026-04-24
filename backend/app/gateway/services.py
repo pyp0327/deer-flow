@@ -18,6 +18,7 @@ from fastapi import HTTPException, Request
 from langchain_core.messages import HumanMessage
 
 from app.gateway.deps import get_checkpointer, get_run_manager, get_store, get_stream_bridge
+from app.gateway.user_context import assert_owner_matches, get_request_user_id, with_owner_metadata
 from deerflow.runtime import (
     END_SENTINEL,
     HEARTBEAT_SENTINEL,
@@ -257,6 +258,20 @@ async def start_run(
     run_mgr = get_run_manager(request)
     checkpointer = get_checkpointer(request)
     store = get_store(request)
+    user_id = get_request_user_id(request)
+    metadata_with_owner = with_owner_metadata(body.metadata, user_id)
+
+    # Existing threads can only be reused by their owner.
+    if store is not None:
+        item = await store.aget(("threads",), thread_id)
+        if item is not None:
+            value = item.value or {}
+            assert_owner_matches(value.get("metadata"), user_id, not_found_detail=f"Thread {thread_id} not found")
+    config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+    checkpoint_tuple = await checkpointer.aget_tuple(config)
+    if checkpoint_tuple is not None:
+        checkpoint_metadata = getattr(checkpoint_tuple, "metadata", {}) or {}
+        assert_owner_matches(checkpoint_metadata, user_id, not_found_detail=f"Thread {thread_id} not found")
 
     disconnect = DisconnectMode.cancel if body.on_disconnect == "cancel" else DisconnectMode.continue_
 
@@ -265,7 +280,7 @@ async def start_run(
             thread_id,
             body.assistant_id,
             on_disconnect=disconnect,
-            metadata=body.metadata or {},
+            metadata=metadata_with_owner,
             kwargs={"input": body.input, "config": body.config},
             multitask_strategy=body.multitask_strategy,
         )
@@ -278,11 +293,11 @@ async def start_run(
     # were never explicitly created via POST /threads (e.g. stateless runs).
     store = get_store(request)
     if store is not None:
-        await _upsert_thread_in_store(store, thread_id, body.metadata)
+        await _upsert_thread_in_store(store, thread_id, metadata_with_owner)
 
     agent_factory = resolve_agent_factory(body.assistant_id)
     graph_input = normalize_input(body.input)
-    config = build_run_config(thread_id, body.config, body.metadata, assistant_id=body.assistant_id)
+    config = build_run_config(thread_id, body.config, metadata_with_owner, assistant_id=body.assistant_id)
 
     # Merge DeerFlow-specific context overrides into configurable.
     # The ``context`` field is a custom extension for the langgraph-compat layer

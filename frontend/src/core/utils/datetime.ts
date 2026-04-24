@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, isValid } from "date-fns";
 import { enUS as dateFnsEnUS, zhCN as dateFnsZhCN } from "date-fns/locale";
 
 import { detectLocale, type Locale } from "@/core/i18n";
@@ -15,12 +15,16 @@ function getDateFnsLocale(locale: Locale) {
 }
 
 export function formatTimeAgo(date: Date | string | number, locale?: Locale) {
+  const parsedDate = date instanceof Date ? date : new Date(date);
+  if (!isValid(parsedDate)) {
+    return "";
+  }
   const effectiveLocale =
     locale ??
     (getLocaleFromCookie() as Locale | null) ??
     // Fallback when cookie is missing (or on first render)
     detectLocale();
-  return formatDistanceToNow(date, {
+  return formatDistanceToNow(parsedDate, {
     addSuffix: true,
     locale: getDateFnsLocale(effectiveLocale),
   });

@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { Toaster } from "sonner";
 
 import { QueryClientProvider } from "@/components/query-client-provider";
+import { SessionUserBootstrap } from "@/components/session-user-bootstrap";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { CommandPalette } from "@/components/workspace/command-palette";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
@@ -24,6 +25,7 @@ export default async function WorkspaceLayout({
 
   return (
     <QueryClientProvider>
+      <SessionUserBootstrap />
       <SidebarProvider className="h-screen" defaultOpen={initialSidebarOpen}>
         <WorkspaceSidebar />
         <SidebarInset className="min-w-0">{children}</SidebarInset>

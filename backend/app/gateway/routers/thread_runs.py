@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 
 from app.gateway.deps import get_checkpointer, get_run_manager, get_stream_bridge
 from app.gateway.services import sse_consumer, start_run
+from app.gateway.user_context import ensure_thread_access
 from deerflow.runtime import RunRecord, serialize_channel_values
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,7 @@ async def wait_run(thread_id: str, body: RunCreateRequest, request: Request) -> 
 @router.get("/{thread_id}/runs", response_model=list[RunResponse])
 async def list_runs(thread_id: str, request: Request) -> list[RunResponse]:
     """List all runs for a thread."""
+    await ensure_thread_access(request, thread_id)
     run_mgr = get_run_manager(request)
     records = await run_mgr.list_by_thread(thread_id)
     return [_record_to_response(r) for r in records]
@@ -161,6 +163,7 @@ async def list_runs(thread_id: str, request: Request) -> list[RunResponse]:
 @router.get("/{thread_id}/runs/{run_id}", response_model=RunResponse)
 async def get_run(thread_id: str, run_id: str, request: Request) -> RunResponse:
     """Get details of a specific run."""
+    await ensure_thread_access(request, thread_id)
     run_mgr = get_run_manager(request)
     record = run_mgr.get(run_id)
     if record is None or record.thread_id != thread_id:
@@ -183,6 +186,7 @@ async def cancel_run(
     - wait=true: Block until the run fully stops, return 204
     - wait=false: Return immediately with 202
     """
+    await ensure_thread_access(request, thread_id)
     run_mgr = get_run_manager(request)
     record = run_mgr.get(run_id)
     if record is None or record.thread_id != thread_id:
@@ -208,6 +212,7 @@ async def cancel_run(
 @router.get("/{thread_id}/runs/{run_id}/join")
 async def join_run(thread_id: str, run_id: str, request: Request) -> StreamingResponse:
     """Join an existing run's SSE stream."""
+    await ensure_thread_access(request, thread_id)
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
     record = run_mgr.get(run_id)
@@ -240,6 +245,7 @@ async def stream_existing_run(
     is present the run is cancelled first; the response then streams any
     remaining buffered events so the client observes a clean shutdown.
     """
+    await ensure_thread_access(request, thread_id)
     run_mgr = get_run_manager(request)
     record = run_mgr.get(run_id)
     if record is None or record.thread_id != thread_id:

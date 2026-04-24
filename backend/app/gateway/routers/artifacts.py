@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from app.gateway.path_utils import resolve_thread_virtual_path
+from app.gateway.user_context import ensure_thread_access
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,8 @@ async def get_artifact(thread_id: str, path: str, request: Request, download: bo
         - Download file: `/api/threads/abc123/artifacts/mnt/user-data/outputs/data.csv?download=true`
         - Active web content such as `.html`, `.xhtml`, and `.svg` artifacts is always downloaded
     """
+    await ensure_thread_access(request, thread_id)
+
     # Check if this is a request for a file inside a .skill archive (e.g., xxx.skill/SKILL.md)
     if ".skill/" in path:
         # Split the path at ".skill/" to get the ZIP file path and internal path
