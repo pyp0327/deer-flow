@@ -17,10 +17,14 @@ export async function GET(
   const threadId = (await params).thread_id;
   let artifactPath = (await params).artifact_path?.join("/") ?? "";
   if (artifactPath.startsWith("mnt/")) {
-    artifactPath = path.resolve(
-      process.cwd(),
-      artifactPath.replace("mnt/", `public/demo/threads/${threadId}/`),
-    );
+    const demoThreadsRoot = path.join(process.cwd(), "public", "demo", "threads");
+    const relativeArtifactPath = artifactPath.slice("mnt/".length);
+    const resolvedPath = path.resolve(demoThreadsRoot, threadId, relativeArtifactPath);
+    const expectedPrefix = path.resolve(demoThreadsRoot, threadId) + path.sep;
+    if (!(resolvedPath + path.sep).startsWith(expectedPrefix)) {
+      return new Response("Invalid artifact path", { status: 400 });
+    }
+    artifactPath = resolvedPath;
     if (fs.existsSync(artifactPath)) {
       if (request.nextUrl.searchParams.get("download") === "true") {
         // Attach the file to the response

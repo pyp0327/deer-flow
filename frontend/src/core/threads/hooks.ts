@@ -15,7 +15,6 @@ import type { LocalSettings } from "../settings";
 import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads/api";
 import { uploadFiles } from "../uploads/api";
-import { promptInputFilePartToFile } from "../uploads/prompt-input-files";
 
 import type { AgentThread, AgentThreadState } from "./types";
 
@@ -155,6 +154,53 @@ async function ensureThreadExistsForUpload(threadId: string): Promise<void> {
 
   if (!response.ok) {
     throw new Error(await readThreadBootstrapError(response));
+  }
+}
+
+async function promptInputFilePartToFile(filePart: {
+  file?: File;
+  url?: string;
+  filename?: string;
+  mediaType?: string;
+}): Promise<File | null> {
+  if (filePart.file instanceof File) {
+    const filename =
+      typeof filePart.filename === "string" && filePart.filename.length > 0
+        ? filePart.filename
+        : filePart.file.name;
+    const mediaType =
+      typeof filePart.mediaType === "string" && filePart.mediaType.length > 0
+        ? filePart.mediaType
+        : filePart.file.type;
+
+    if (filePart.file.name === filename && filePart.file.type === mediaType) {
+      return filePart.file;
+    }
+
+    return new File([filePart.file], filename, { type: mediaType });
+  }
+
+  if (!filePart.url || !filePart.filename) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(filePart.url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} while fetching fallback file URL`);
+    }
+    const blob = await response.blob();
+
+    return new File([blob], filePart.filename, {
+      type: filePart.mediaType || blob.type,
+    });
+  } catch (error) {
+    console.warn("promptInputFilePartToFile: fetch fallback failed", {
+      error,
+      url: filePart.url,
+      filename: filePart.filename,
+    });
+    return null;
   }
 }
 
