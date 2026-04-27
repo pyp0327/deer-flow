@@ -134,6 +134,29 @@ function getStreamErrorMessage(error: unknown): string {
   return "Request failed.";
 }
 
+async function readThreadBootstrapError(response: Response): Promise<string> {
+  const fallback = "Failed to prepare thread for file upload.";
+  const error = await response.json().catch(() => ({ detail: fallback }));
+  if (typeof error?.detail === "string" && error.detail.trim()) {
+    return error.detail;
+  }
+  return fallback;
+}
+
+async function ensureThreadExistsForUpload(threadId: string): Promise<void> {
+  const response = await fetch(`${getBackendBaseURL()}/api/threads`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ thread_id: threadId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readThreadBootstrapError(response));
+  }
+}
+
 export function useThreadStream({
   threadId,
   context,
@@ -376,9 +399,9 @@ export function useThreadStream({
       }
       setOptimisticMessages(newOptimistic);
 
-      // Only fire onStart immediately for an existing persisted thread.
-      // Brand-new chats should wait for onCreated(meta.thread_id) so URL sync
-      // uses the real server-generated thread id.
+      // Fire onStart immediately only when we already have a persisted thread.
+      // Brand-new chats typically wait for onCreated(meta.thread_id), except
+      // attachment flows that pre-create the thread before upload.
       if (threadIdRef.current) {
         _handleOnStart(threadId);
       }
@@ -411,6 +434,15 @@ export function useThreadStream({
             }
 
             if (files.length > 0) {
+              // For brand-new chats, uploads hit the gateway before stream submit.
+              // Ensure the thread record exists so upload ownership checks pass.
+              if (!threadIdRef.current) {
+                await ensureThreadExistsForUpload(threadId);
+                threadIdRef.current = threadId;
+                setOnStreamThreadId(threadId);
+                _handleOnStart(threadId);
+              }
+
               const uploadResponse = await uploadFiles(threadId, files);
               uploadedFileInfo = uploadResponse.files;
 
