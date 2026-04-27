@@ -13,8 +13,9 @@ import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
 import type { LocalSettings } from "../settings";
 import { useUpdateSubtask } from "../tasks/context";
-import type { UploadedFileInfo } from "../uploads";
-import { promptInputFilePartToFile, uploadFiles } from "../uploads";
+import type { UploadedFileInfo } from "../uploads/api";
+import { uploadFiles } from "../uploads/api";
+import { promptInputFilePartToFile } from "../uploads/prompt-input-files";
 
 import type { AgentThread, AgentThreadState } from "./types";
 
