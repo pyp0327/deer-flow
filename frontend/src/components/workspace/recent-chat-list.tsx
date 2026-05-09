@@ -54,7 +54,7 @@ import {
   useThreads,
 } from "@/core/threads/hooks";
 import type { AgentThread, AgentThreadState } from "@/core/threads/types";
-import { pathOfThread, titleOfThread } from "@/core/threads/utils";
+import { titleOfThread } from "@/core/threads/utils";
 import { copyTextToClipboard } from "@/core/utils/clipboard";
 import { env } from "@/env";
 import { isIMEComposing } from "@/lib/ime";
@@ -77,6 +77,19 @@ export function RecentChatList() {
   const [renameThreadId, setRenameThreadId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  const getThreadPath = useCallback((thread: AgentThread) => {
+    const agentNameFromContext = thread.context?.agent_name;
+    const agentNameFromMetadata =
+      typeof thread.metadata?.agent_name === "string"
+        ? thread.metadata.agent_name
+        : undefined;
+    const agentName = agentNameFromContext ?? agentNameFromMetadata;
+
+    return agentName
+      ? `/workspace/agents/${encodeURIComponent(agentName)}/chats/${thread.thread_id}`
+      : `/workspace/chats/${thread.thread_id}`;
+  }, []);
+
   const handleDelete = useCallback(
     (threadId: string) => {
       deleteThread({ threadId });
@@ -84,18 +97,18 @@ export function RecentChatList() {
         const threadIndex = threads.findIndex((t) => t.thread_id === threadId);
         let nextThreadPath = agentNameFromPath
           ? `/workspace/agents/${encodeURIComponent(agentNameFromPath)}/chats/new`
-          : pathOfThread("new");
+          : "/workspace/chats/new";
         if (threadIndex > -1) {
           if (threads[threadIndex + 1]) {
-            nextThreadPath = pathOfThread(threads[threadIndex + 1]!);
+            nextThreadPath = getThreadPath(threads[threadIndex + 1]!);
           } else if (threads[threadIndex - 1]) {
-            nextThreadPath = pathOfThread(threads[threadIndex - 1]!);
+            nextThreadPath = getThreadPath(threads[threadIndex - 1]!);
           }
         }
         void router.push(nextThreadPath);
       }
     },
-    [agentNameFromPath, deleteThread, router, threadIdFromPath, threads],
+    [agentNameFromPath, deleteThread, getThreadPath, router, threadIdFromPath, threads],
   );
 
   const handleRenameClick = useCallback(
@@ -125,7 +138,7 @@ export function RecentChatList() {
         window.location.hostname === "127.0.0.1";
       // On localhost: use Vercel URL; On production: use current origin
       const baseUrl = isLocalhost ? VERCEL_URL : window.location.origin;
-      const shareUrl = `${baseUrl}${pathOfThread(thread)}`;
+      const shareUrl = `${baseUrl}${getThreadPath(thread)}`;
       try {
         await copyTextToClipboard(shareUrl);
         toast.success(t.clipboard.linkCopied);
@@ -133,7 +146,7 @@ export function RecentChatList() {
         toast.error(t.clipboard.failedToCopyToClipboard);
       }
     },
-    [t],
+    [getThreadPath, t],
   );
 
   const handleExport = useCallback(
@@ -176,7 +189,7 @@ export function RecentChatList() {
           <SidebarMenu>
             <div className="flex w-full flex-col gap-1">
               {threads.map((thread) => {
-                const isActive = pathOfThread(thread) === pathname;
+                const isActive = getThreadPath(thread) === pathname;
                 return (
                   <SidebarMenuItem
                     key={thread.thread_id}
@@ -186,7 +199,7 @@ export function RecentChatList() {
                       <div>
                         <Link
                           className="text-muted-foreground block w-full whitespace-nowrap group-hover/side-menu-item:overflow-hidden"
-                          href={pathOfThread(thread)}
+                          href={getThreadPath(thread)}
                         >
                           {titleOfThread(thread)}
                         </Link>
