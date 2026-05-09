@@ -82,12 +82,9 @@ export function RecentChatList() {
       deleteThread({ threadId });
       if (threadId === threadIdFromPath) {
         const threadIndex = threads.findIndex((t) => t.thread_id === threadId);
-        let nextThreadPath = pathOfThread({
-          thread_id: "new",
-          context: {
-            agent_name: agentNameFromPath,
-          },
-        });
+        let nextThreadPath = agentNameFromPath
+          ? `/workspace/agents/${encodeURIComponent(agentNameFromPath)}/chats/new`
+          : pathOfThread("new");
         if (threadIndex > -1) {
           if (threads[threadIndex + 1]) {
             nextThreadPath = pathOfThread(threads[threadIndex + 1]!);
