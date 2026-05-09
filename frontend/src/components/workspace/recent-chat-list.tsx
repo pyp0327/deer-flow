@@ -77,18 +77,14 @@ export function RecentChatList() {
   const [renameThreadId, setRenameThreadId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  const getThreadPath = useCallback((thread: AgentThread) => {
-    const agentNameFromContext = thread.context?.agent_name;
-    const agentNameFromMetadata =
-      typeof thread.metadata?.agent_name === "string"
-        ? thread.metadata.agent_name
-        : undefined;
-    const agentName = agentNameFromContext ?? agentNameFromMetadata;
-
-    return agentName
-      ? `/workspace/agents/${encodeURIComponent(agentName)}/chats/${thread.thread_id}`
-      : `/workspace/chats/${thread.thread_id}`;
-  }, []);
+  const getThreadPath = useCallback(
+    (thread: AgentThread) => {
+      return agentNameFromPath
+        ? `/workspace/agents/${encodeURIComponent(agentNameFromPath)}/chats/${thread.thread_id}`
+        : `/workspace/chats/${thread.thread_id}`;
+    },
+    [agentNameFromPath],
+  );
 
   const handleDelete = useCallback(
     (threadId: string) => {
