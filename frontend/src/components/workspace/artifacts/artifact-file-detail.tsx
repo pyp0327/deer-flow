@@ -35,6 +35,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import { installSkill } from "@/core/skills/api";
 import { streamdownPlugins } from "@/core/streamdown";
 import { checkCodeFile, getFileName } from "@/core/utils/files";
+import { copyTextToClipboard } from "@/core/utils/clipboard";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -209,10 +210,10 @@ export function ArtifactFileDetail({
                 disabled={!content}
                 onClick={async () => {
                   try {
-                    await navigator.clipboard.writeText(displayContent ?? "");
+                    await copyTextToClipboard(displayContent ?? "");
                     toast.success(t.clipboard.copiedToClipboard);
                   } catch (error) {
-                    toast.error("Failed to copy to clipboard");
+                    toast.error(t.clipboard.failedToCopyToClipboard);
                     console.error(error);
                   }
                 }}

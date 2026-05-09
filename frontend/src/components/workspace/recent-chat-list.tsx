@@ -55,6 +55,7 @@ import {
 } from "@/core/threads/hooks";
 import type { AgentThread, AgentThreadState } from "@/core/threads/types";
 import { pathOfThread, titleOfThread } from "@/core/threads/utils";
+import { copyTextToClipboard } from "@/core/utils/clipboard";
 import { env } from "@/env";
 import { isIMEComposing } from "@/lib/ime";
 
@@ -126,7 +127,7 @@ export function RecentChatList() {
       const baseUrl = isLocalhost ? VERCEL_URL : window.location.origin;
       const shareUrl = `${baseUrl}${pathOfThread(thread)}`;
       try {
-        await navigator.clipboard.writeText(shareUrl);
+        await copyTextToClipboard(shareUrl);
         toast.success(t.clipboard.linkCopied);
       } catch {
         toast.error(t.clipboard.failedToCopyToClipboard);
